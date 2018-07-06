@@ -41,7 +41,6 @@ RUN apt-get update -q --fix-missing && \
     liblz4-tool \
     libmail-spf-perl \
     libnet-dns-perl \
-    libsasl2-modules \
     lrzip \
     lzop \
     netcat-openbsd \
@@ -52,7 +51,6 @@ RUN apt-get update -q --fix-missing && \
     pax \
     pflogsumm \
     p7zip-full \
-    postfix-ldap \
     postfix-pcre \
     postfix-policyd-spf-python \
     postsrsd \
@@ -61,7 +59,6 @@ RUN apt-get update -q --fix-missing && \
     ripole \
     rpm2cpio \
     rsyslog \
-    sasl2-bin \
     spamassassin \
     supervisor \
     postgrey \
@@ -76,15 +73,6 @@ RUN apt-get update -q --fix-missing && \
   apt-get update -q --fix-missing && \
   apt-get -y upgrade \
     filebeat \
-    && \
-  apt-get -t stretch-backports -y install --no-install-recommends \
-    dovecot-core \
-    dovecot-imapd \
-    dovecot-ldap \
-    dovecot-lmtpd \
-    dovecot-managesieved \
-    dovecot-pop3d \
-    dovecot-sieve \
     && \
   apt-get autoclean && \
   rm -rf /var/lib/apt/lists/* && \
@@ -103,26 +91,6 @@ RUN echo "0 0,6,12,18 * * * /usr/bin/freshclam --quiet" > /etc/cron.d/freshclam 
   sed -i 's/AllowSupplementaryGroups false/AllowSupplementaryGroups true/g' /etc/clamav/clamd.conf && \
   mkdir /var/run/clamav && \
   chown -R clamav:root /var/run/clamav
-
-# Configures Dovecot
-COPY target/dovecot/auth-passwdfile.inc target/dovecot/??-*.conf /etc/dovecot/conf.d/
-RUN sed -i -e 's/include_try \/usr\/share\/dovecot\/protocols\.d/include_try \/etc\/dovecot\/protocols\.d/g' /etc/dovecot/dovecot.conf && \
-  sed -i -e 's/#mail_plugins = \$mail_plugins/mail_plugins = \$mail_plugins sieve/g' /etc/dovecot/conf.d/15-lda.conf && \
-  sed -i -e 's/^.*lda_mailbox_autocreate.*/lda_mailbox_autocreate = yes/g' /etc/dovecot/conf.d/15-lda.conf && \
-  sed -i -e 's/^.*lda_mailbox_autosubscribe.*/lda_mailbox_autosubscribe = yes/g' /etc/dovecot/conf.d/15-lda.conf && \
-  sed -i -e 's/^.*postmaster_address.*/postmaster_address = '${POSTMASTER_ADDRESS:="postmaster@domain.com"}'/g' /etc/dovecot/conf.d/15-lda.conf && \
-  sed -i 's/#imap_idle_notify_interval = 2 mins/imap_idle_notify_interval = 29 mins/' /etc/dovecot/conf.d/20-imap.conf && \
-  # stretch-backport of dovecot needs this folder
-  mkdir /etc/dovecot/ssl && \
-  chmod 755 /etc/dovecot/ssl  && \
-  cd /usr/share/dovecot && \
-  ./mkcert.sh  && \
-  mkdir -p /usr/lib/dovecot/sieve-pipe /usr/lib/dovecot/sieve-filter /usr/lib/dovecot/sieve-global && \
-  chmod 755 -R /usr/lib/dovecot/sieve-pipe /usr/lib/dovecot/sieve-filter /usr/lib/dovecot/sieve-global
-
-# Configures LDAP
-COPY target/dovecot/dovecot-ldap.conf.ext /etc/dovecot
-COPY target/postfix/ldap-users.cf target/postfix/ldap-groups.cf target/postfix/ldap-aliases.cf target/postfix/ldap-domains.cf /etc/postfix/
 
 # Enables Spamassassin CRON updates and update hook for supervisor
 RUN sed -i -r 's/^(CRON)=0/\1=1/g' /etc/default/spamassassin && \
