@@ -89,16 +89,15 @@ function register_functions() {
 	fi
 
 	if [ "$SMTP_ONLY" != 1 ]; then
-		_register_setup_function "_setup_dovecot"
-		_register_setup_function "_setup_dovecot_local_user"
+            :
 	fi
 
 	if [ "$ENABLE_LDAP" = 1 ];then
-		_register_setup_function "_setup_ldap"
+            :
 	fi
 
 	if [ "$ENABLE_SASLAUTHD" = 1 ];then
-		_register_setup_function "_setup_saslauthd"
+            :
 	fi
 
 	if [ "$ENABLE_POSTGREY" = 1 ];then
@@ -113,11 +112,8 @@ function register_functions() {
 	_register_setup_function "_setup_amavis"
 	_register_setup_function "_setup_dmarc_hostname"
 	_register_setup_function "_setup_postfix_hostname"
-	_register_setup_function "_setup_dovecot_hostname"
 
-	_register_setup_function "_setup_postfix_sasl"
 	_register_setup_function "_setup_postfix_override_configuration"
-	_register_setup_function "_setup_postfix_sasl_password"
 	_register_setup_function "_setup_security_stack"
 	_register_setup_function "_setup_postfix_aliases"
 	_register_setup_function "_setup_postfix_vhost"
@@ -182,7 +178,7 @@ function register_functions() {
 	fi
 
 	if [ "$SMTP_ONLY" != 1 ]; then
-		_register_start_daemon "_start_daemons_dovecot"
+            :
 	fi
 
 	# needs to be started before saslauthd
@@ -197,7 +193,7 @@ function register_functions() {
 	_register_start_daemon "_start_daemons_postfix"
 
 	if [ "$ENABLE_SASLAUTHD" = 1 ];then
-		_register_start_daemon "_start_daemons_saslauthd"
+            :
 	fi
 
 	# care needs to run after postfix
@@ -455,181 +451,6 @@ function _setup_postfix_hostname() {
 	postconf -e "mydomain = $DOMAINNAME"
 }
 
-function _setup_dovecot_hostname() {
-	notify 'task' 'Applying hostname to Dovecot'
-
-	notify 'inf' "Applying hostname to /etc/dovecot/conf.d/15-lda.conf"
-	sed -i 's/^#hostname =.*$/hostname = '$HOSTNAME'/g' /etc/dovecot/conf.d/15-lda.conf
-}
-
-function _setup_dovecot() {
-	notify 'task' 'Setting up Dovecot'
-
-	cp -a /usr/share/dovecot/protocols.d /etc/dovecot/
-	# Disable pop3 (it will be eventually enabled later in the script, if requested)
-	mv /etc/dovecot/protocols.d/pop3d.protocol /etc/dovecot/protocols.d/pop3d.protocol.disab
-	mv /etc/dovecot/protocols.d/managesieved.protocol /etc/dovecot/protocols.d/managesieved.protocol.disab
-	sed -i -e 's/#ssl = yes/ssl = yes/g' /etc/dovecot/conf.d/10-master.conf
-	sed -i -e 's/#port = 993/port = 993/g' /etc/dovecot/conf.d/10-master.conf
-	sed -i -e 's/#port = 995/port = 995/g' /etc/dovecot/conf.d/10-master.conf
-	sed -i -e 's/#ssl = yes/ssl = required/g' /etc/dovecot/conf.d/10-ssl.conf
-	sed -i 's/^postmaster_address = .*$/postmaster_address = '$POSTMASTER_ADDRESS'/g' /etc/dovecot/conf.d/15-lda.conf
-
-	# Enable Managesieve service by setting the symlink
-	# to the configuration file Dovecot will actually find
-	if [ "$ENABLE_MANAGESIEVE" = 1 ]; then
-		notify 'inf' "Sieve management enabled"
-		mv /etc/dovecot/protocols.d/managesieved.protocol.disab /etc/dovecot/protocols.d/managesieved.protocol
-	fi
-
-	# Copy pipe and filter programs, if any
-	rm -f /usr/lib/dovecot/sieve-filter/*
-	rm -f /usr/lib/dovecot/sieve-pipe/*
-	[ -d /tmp/docker-mailserver/sieve-filter ] && cp /tmp/docker-mailserver/sieve-filter/* /usr/lib/dovecot/sieve-filter/
-	[ -d /tmp/docker-mailserver/sieve-pipe ] && cp /tmp/docker-mailserver/sieve-pipe/* /usr/lib/dovecot/sieve-pipe/
-	if [ -f /tmp/docker-mailserver/before.dovecot.sieve ]; then
-		sed -i "s/#sieve_before =/sieve_before =/" /etc/dovecot/conf.d/90-sieve.conf
-		cp /tmp/docker-mailserver/before.dovecot.sieve /usr/lib/dovecot/sieve-global/
-		sievec /usr/lib/dovecot/sieve-global/before.dovecot.sieve
-	else
-		sed -i "s/  sieve_before =/  #sieve_before =/" /etc/dovecot/conf.d/90-sieve.conf
-	fi
-
-	if [ -f /tmp/docker-mailserver/after.dovecot.sieve ]; then
-		sed -i "s/#sieve_after =/sieve_after =/" /etc/dovecot/conf.d/90-sieve.conf
-		cp /tmp/docker-mailserver/after.dovecot.sieve /usr/lib/dovecot/sieve-global/
-		sievec /usr/lib/dovecot/sieve-global/after.dovecot.sieve
-	else 
-		sed -i "s/  sieve_after =/  #sieve_after =/" /etc/dovecot/conf.d/90-sieve.conf	
-	fi
-	chown docker:docker -R /usr/lib/dovecot/sieve*
-	chmod 550 -R /usr/lib/dovecot/sieve*
-}
-
-function _setup_dovecot_local_user() {
-	notify 'task' 'Setting up Dovecot Local User'
-	echo -n > /etc/postfix/vmailbox
-	echo -n > /etc/dovecot/userdb
-	if [ -f /tmp/docker-mailserver/postfix-accounts.cf -a "$ENABLE_LDAP" != 1 ]; then
-		notify 'inf' "Checking file line endings"
-		sed -i 's/\r//g' /tmp/docker-mailserver/postfix-accounts.cf
-		notify 'inf' "Regenerating postfix user list"
-		echo "# WARNING: this file is auto-generated. Modify config/postfix-accounts.cf to edit user list." > /etc/postfix/vmailbox
-
-		# Checking that /tmp/docker-mailserver/postfix-accounts.cf ends with a newline
-		sed -i -e '$a\' /tmp/docker-mailserver/postfix-accounts.cf
-
-		chown dovecot:dovecot /etc/dovecot/userdb
-		chmod 640 /etc/dovecot/userdb
-
-		sed -i -e '/\!include auth-ldap\.conf\.ext/s/^/#/' /etc/dovecot/conf.d/10-auth.conf
-		sed -i -e '/\!include auth-passwdfile\.inc/s/^#//' /etc/dovecot/conf.d/10-auth.conf
-
-		# Creating users
-		# 'pass' is encrypted
-		# comments and empty lines are ignored
-		grep -v "^\s*$\|^\s*\#" /tmp/docker-mailserver/postfix-accounts.cf | while IFS=$'|' read login pass
-		do
-			# Setting variables for better readability
-			user=$(echo ${login} | cut -d @ -f1)
-			domain=$(echo ${login} | cut -d @ -f2)
-			# Let's go!
-			notify 'inf' "user '${user}' for domain '${domain}' with password '********'"
-			echo "${login} ${domain}/${user}/" >> /etc/postfix/vmailbox
-			# User database for dovecot has the following format:
-			# user:password:uid:gid:(gecos):home:(shell):extra_fields
-			# Example :
-			# ${login}:${pass}:5000:5000::/var/mail/${domain}/${user}::userdb_mail=maildir:/var/mail/${domain}/${user}
-			echo "${login}:${pass}:5000:5000::/var/mail/${domain}/${user}::" >> /etc/dovecot/userdb
-			mkdir -p /var/mail/${domain}
-			if [ ! -d "/var/mail/${domain}/${user}" ]; then
-				maildirmake.dovecot "/var/mail/${domain}/${user}"
-				maildirmake.dovecot "/var/mail/${domain}/${user}/.Sent"
-				maildirmake.dovecot "/var/mail/${domain}/${user}/.Trash"
-				maildirmake.dovecot "/var/mail/${domain}/${user}/.Drafts"
-				echo -e "INBOX\nSent\nTrash\nDrafts" >> "/var/mail/${domain}/${user}/subscriptions"
-				touch "/var/mail/${domain}/${user}/.Sent/maildirfolder"
-			fi
-			# Copy user provided sieve file, if present
-			test -e /tmp/docker-mailserver/${login}.dovecot.sieve && cp /tmp/docker-mailserver/${login}.dovecot.sieve /var/mail/${domain}/${user}/.dovecot.sieve
-			echo ${domain} >> /tmp/vhost.tmp
-		done
-	else
-		notify 'inf' "'config/docker-mailserver/postfix-accounts.cf' is not provided. No mail account created."
-	fi
-
-	if [[ ! $(grep '@' /tmp/docker-mailserver/postfix-accounts.cf | grep '|') ]]; then
-		if [ $ENABLE_LDAP -eq 0 ]; then
-			notify 'fatal' "Unless using LDAP, you need at least 1 email account to start the server."
-			defunc
-		fi
-	fi
-
-}
-
-function _setup_ldap() {
-	notify 'task' 'Setting up Ldap'
-
-	notify 'inf' 'Checking for custom configs'
-	# cp config files if in place
-	for i in 'users' 'groups' 'aliases' 'domains'; do
-	    fpath="/tmp/docker-mailserver/ldap-${i}.cf"
-	    if [ -f $fpath ]; then
-		cp ${fpath} /etc/postfix/ldap-${i}.cf
-	    fi
-	done
-
-	notify 'inf' 'Starting to override configs'
-	for f in /etc/postfix/ldap-users.cf /etc/postfix/ldap-groups.cf /etc/postfix/ldap-aliases.cf /etc/postfix/ldap-domains.cf /etc/postfix/maps/sender_login_maps.ldap
-	do
-		[[ $f =~ ldap-user ]] && export LDAP_QUERY_FILTER="${LDAP_QUERY_FILTER_USER}"
-		[[ $f =~ ldap-group ]] && export LDAP_QUERY_FILTER="${LDAP_QUERY_FILTER_GROUP}"
-		[[ $f =~ ldap-aliases ]] && export LDAP_QUERY_FILTER="${LDAP_QUERY_FILTER_ALIAS}"
-		[[ $f =~ ldap-domains ]] && export LDAP_QUERY_FILTER="${LDAP_QUERY_FILTER_DOMAIN}"
-		configomat.sh "LDAP_" "${f}"
-	done
-
-	notify 'inf' "Configuring dovecot LDAP"
-
-	declare -A _dovecot_ldap_mapping
-
-	_dovecot_ldap_mapping["DOVECOT_BASE"]="${DOVECOT_BASE:="${LDAP_SEARCH_BASE}"}"
-	_dovecot_ldap_mapping["DOVECOT_DN"]="${DOVECOT_DN:="${LDAP_BIND_DN}"}"
-	_dovecot_ldap_mapping["DOVECOT_DNPASS"]="${DOVECOT_DNPASS:="${LDAP_BIND_PW}"}"
-	_dovecot_ldap_mapping["DOVECOT_HOSTS"]="${DOVECOT_HOSTS:="${LDAP_SERVER_HOST}"}"
-	# Not sure whether this can be the same or not
-	# _dovecot_ldap_mapping["DOVECOT_PASS_FILTER"]="${DOVECOT_PASS_FILTER:="${LDAP_QUERY_FILTER_USER}"}"
-	# _dovecot_ldap_mapping["DOVECOT_USER_FILTER"]="${DOVECOT_USER_FILTER:="${LDAP_QUERY_FILTER_USER}"}"
-
-	for var in ${!_dovecot_ldap_mapping[@]}; do
-		export $var=${_dovecot_ldap_mapping[$var]}
-	done
-
-	configomat.sh "DOVECOT_" "/etc/dovecot/dovecot-ldap.conf.ext"
-
-	# Add  domainname to vhost.
-	echo $DOMAINNAME >> /tmp/vhost.tmp
-
-	notify 'inf' "Enabling dovecot LDAP authentification"
-	sed -i -e '/\!include auth-ldap\.conf\.ext/s/^#//' /etc/dovecot/conf.d/10-auth.conf
-	sed -i -e '/\!include auth-passwdfile\.inc/s/^/#/' /etc/dovecot/conf.d/10-auth.conf
-
-	notify 'inf' "Configuring LDAP"
-	[ -f /etc/postfix/ldap-users.cf ] && \
-		postconf -e "virtual_mailbox_maps = ldap:/etc/postfix/ldap-users.cf" || \
-		notify 'inf' "==> Warning: /etc/postfix/ldap-user.cf not found"
-
-	[ -f /etc/postfix/ldap-domains.cf ] && \
-		postconf -e "virtual_mailbox_domains = /etc/postfix/vhost, ldap:/etc/postfix/ldap-domains.cf" || \
-		notify 'inf' "==> Warning: /etc/postfix/ldap-domains.cf not found"
-
-	[ -f /etc/postfix/ldap-aliases.cf -a -f /etc/postfix/ldap-groups.cf ] && \
-		postconf -e "virtual_alias_maps = ldap:/etc/postfix/ldap-aliases.cf, ldap:/etc/postfix/ldap-groups.cf" || \
-		notify 'inf' "==> Warning: /etc/postfix/ldap-aliases.cf or /etc/postfix/ldap-groups.cf not found"
-
-	return 0
-}
-
 function _setup_postgrey() {
 	notify 'inf' "Configuring postgrey"
 	sed -i -e 's/, reject_rbl_client bl.spamcop.net$/, reject_rbl_client bl.spamcop.net, check_policy_service inet:127.0.0.1:10023/' /etc/postfix/main.cf
@@ -663,65 +484,6 @@ function _setup_postfix_access_control() {
   notify 'inf' "Configuring user access"
   [ -f /tmp/docker-mailserver/postfix-send-access.cf ] && sed -i 's|smtpd_sender_restrictions =|smtpd_sender_restrictions = check_sender_access texthash:/tmp/docker-mailserver/postfix-send-access.cf,|' /etc/postfix/main.cf
   [ -f /tmp/docker-mailserver/postfix-receive-access.cf ] && sed -i 's|smtpd_recipient_restrictions =|smtpd_recipient_restrictions = check_recipient_access texthash:/tmp/docker-mailserver/postfix-receive-access.cf,|' /etc/postfix/main.cf
-}
-
-function _setup_postfix_sasl() {
-    if [[ ${ENABLE_SASLAUTHD} == 1 ]];then
-	[ ! -f /etc/postfix/sasl/smtpd.conf ] && cat > /etc/postfix/sasl/smtpd.conf << EOF
-pwcheck_method: saslauthd
-mech_list: plain login
-EOF
-    fi
-
-    # cyrus sasl or dovecot sasl
-    if [[ ${ENABLE_SASLAUTHD} == 1 ]] || [[ ${SMTP_ONLY} == 0 ]];then
-	sed -i -e 's|^smtpd_sasl_auth_enable[[:space:]]\+.*|smtpd_sasl_auth_enable = yes|g' /etc/postfix/main.cf
-    else
-	sed -i -e 's|^smtpd_sasl_auth_enable[[:space:]]\+.*|smtpd_sasl_auth_enable = no|g' /etc/postfix/main.cf
-    fi
-
-    return 0
-}
-
-function _setup_saslauthd() {
-	notify 'task' "Setting up Saslauthd"
-
-	notify 'inf' "Configuring Cyrus SASL"
-	# checking env vars and setting defaults
-	[ -z "$SASLAUTHD_MECHANISMS" ] && SASLAUTHD_MECHANISMS=pam
-	[ "$SASLAUTHD_MECHANISMS" = ldap -a -z "$SASLAUTHD_LDAP_SEARCH_BASE" ] && SASLAUTHD_MECHANISMS=pam
-	[ -z "$SASLAUTHD_LDAP_SERVER" ] && SASLAUTHD_LDAP_SERVER=localhost
-	[ -z "$SASLAUTHD_LDAP_FILTER" ] && SASLAUTHD_LDAP_FILTER='(&(uniqueIdentifier=%u)(mailEnabled=TRUE))'
-	([ -z "$SASLAUTHD_LDAP_SSL" ] || [ $SASLAUTHD_LDAP_SSL == 0 ]) && SASLAUTHD_LDAP_PROTO='ldap://' || SASLAUTHD_LDAP_PROTO='ldaps://'
-
-	if [ ! -f /etc/saslauthd.conf ]; then
-		notify 'inf' "Creating /etc/saslauthd.conf"
-		cat > /etc/saslauthd.conf << EOF
-ldap_servers: ${SASLAUTHD_LDAP_PROTO}${SASLAUTHD_LDAP_SERVER}
-
-ldap_auth_method: bind
-ldap_bind_dn: ${SASLAUTHD_LDAP_BIND_DN}
-ldap_bind_pw: ${SASLAUTHD_LDAP_PASSWORD}
-
-ldap_search_base: ${SASLAUTHD_LDAP_SEARCH_BASE}
-ldap_filter: ${SASLAUTHD_LDAP_FILTER}
-
-ldap_referrals: yes
-log_level: 10
-EOF
-	fi
-
-		 sed -i \
-		 -e "/^[^#].*smtpd_sasl_type.*/s/^/#/g" \
-		 -e "/^[^#].*smtpd_sasl_path.*/s/^/#/g" \
-		 /etc/postfix/master.cf
-
-	sed -i \
-		-e "/smtpd_sasl_path =.*/d" \
-		-e "/smtpd_sasl_type =.*/d" \
-		-e "/dovecot_destination_recipient_limit =.*/d" \
-		/etc/postfix/main.cf
-	gpasswd -a postfix sasl
 }
 
 function _setup_postfix_aliases() {
@@ -797,10 +559,6 @@ function _setup_ssl() {
       sed -i -r 's/^smtp_tls_protocols =.*$/smtp_tls_protocols = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1/' /etc/postfix/main.cf
       sed -i -r 's/^tls_high_cipherlist =.*$/tls_high_cipherlist = ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256/' /etc/postfix/main.cf
 
-      # Dovecot configuration
-      sed -i -r 's/^ssl_protocols =.*$/ssl_protocols = !SSLv3,!TLSv1,!TLSv1.1/' /etc/dovecot/conf.d/10-ssl.conf
-      sed -i -r 's/^ssl_cipher_list =.*$/ssl_cipher_list = ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256/' /etc/dovecot/conf.d/10-ssl.conf
-
       notify 'inf' "TLS configured with 'modern' ciphers"
     ;;
     "intermediate" )
@@ -809,10 +567,6 @@ function _setup_ssl() {
       sed -i -r 's/^smtpd_tls_protocols =.*$/smtpd_tls_protocols = !SSLv2,!SSLv3/' /etc/postfix/main.cf
       sed -i -r 's/^smtp_tls_protocols =.*$/smtp_tls_protocols = !SSLv2,!SSLv3/' /etc/postfix/main.cf
       sed -i -r 's/^tls_high_cipherlist =.*$/tls_high_cipherlist = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS/' /etc/postfix/main.cf
-
-      # Dovecot configuration
-      sed -i -r 's/^ssl_protocols = .*$/ssl_protocols = !SSLv3/' /etc/dovecot/conf.d/10-ssl.conf
-      sed -i -r 's/^ssl_cipher_list = .*$/ssl_cipher_list = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS/' /etc/dovecot/conf.d/10-ssl.conf
 
       notify 'inf' "TLS configured with 'intermediate' ciphers"
     ;;
@@ -838,10 +592,6 @@ function _setup_ssl() {
 					sed -i -r 's~smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem~smtpd_tls_cert_file=/etc/letsencrypt/live/'$HOSTNAME'/fullchain.pem~g' /etc/postfix/main.cf
 					sed -i -r 's~smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key~smtpd_tls_key_file=/etc/letsencrypt/live/'$HOSTNAME'/'"$KEY"'\.pem~g' /etc/postfix/main.cf
 
-					# Dovecot configuration
-					sed -i -e 's~ssl_cert = </etc/dovecot/ssl/dovecot\.pem~ssl_cert = </etc/letsencrypt/live/'$HOSTNAME'/fullchain\.pem~g' /etc/dovecot/conf.d/10-ssl.conf
-					sed -i -e 's~ssl_key = </etc/dovecot/ssl/dovecot\.key~ssl_key = </etc/letsencrypt/live/'$HOSTNAME'/'"$KEY"'\.pem~g' /etc/dovecot/conf.d/10-ssl.conf
-
 					notify 'inf' "SSL configured with 'letsencrypt' certificates"
 				else
 					notify 'err' "Key filename not set!"
@@ -861,10 +611,6 @@ function _setup_ssl() {
 			sed -i -r 's~smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem~smtpd_tls_cert_file=/etc/postfix/ssl/'$HOSTNAME'-full.pem~g' /etc/postfix/main.cf
 			sed -i -r 's~smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key~smtpd_tls_key_file=/etc/postfix/ssl/'$HOSTNAME'-full.pem~g' /etc/postfix/main.cf
 
-			# Dovecot configuration
-			sed -i -e 's~ssl_cert = </etc/dovecot/ssl/dovecot\.pem~ssl_cert = </etc/postfix/ssl/'$HOSTNAME'-full\.pem~g' /etc/dovecot/conf.d/10-ssl.conf
-			sed -i -e 's~ssl_key = </etc/dovecot/ssl/dovecot\.key~ssl_key = </etc/postfix/ssl/'$HOSTNAME'-full\.pem~g' /etc/dovecot/conf.d/10-ssl.conf
-
 			notify 'inf' "SSL configured with 'CA signed/custom' certificates"
 		fi
 		;;
@@ -882,10 +628,6 @@ function _setup_ssl() {
 			# Postfix configuration
 			sed -i -r 's~smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem~smtpd_tls_cert_file=/etc/postfix/ssl/cert~g' /etc/postfix/main.cf
 			sed -i -r 's~smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key~smtpd_tls_key_file=/etc/postfix/ssl/key~g' /etc/postfix/main.cf
-
-			# Dovecot configuration
-			sed -i -e 's~ssl_cert = </etc/dovecot/ssl/dovecot\.pem~ssl_cert = </etc/postfix/ssl/cert~g' /etc/dovecot/conf.d/10-ssl.conf
-			sed -i -e 's~ssl_key = </etc/dovecot/ssl/dovecot\.key~ssl_key = </etc/postfix/ssl/key~g' /etc/dovecot/conf.d/10-ssl.conf
 
 			notify 'inf' "SSL configured with 'Manual' certificates"
 		fi
@@ -911,10 +653,6 @@ function _setup_ssl() {
 		sed -i -r 's~#smtpd_tls_CAfile=~smtpd_tls_CAfile=/etc/postfix/ssl/cacert.pem~g' /etc/postfix/main.cf
 		sed -i -r 's~#smtp_tls_CAfile=~smtp_tls_CAfile=/etc/postfix/ssl/cacert.pem~g' /etc/postfix/main.cf
 		ln -s /etc/postfix/ssl/cacert.pem "/etc/ssl/certs/cacert-$HOSTNAME.pem"
-
-		# Dovecot configuration
-		sed -i -e 's~ssl_cert = </etc/dovecot/ssl/dovecot\.pem~ssl_cert = </etc/postfix/ssl/'$HOSTNAME'-combined\.pem~g' /etc/dovecot/conf.d/10-ssl.conf
-		sed -i -e 's~ssl_key = </etc/dovecot/ssl/dovecot\.key~ssl_key = </etc/postfix/ssl/'$HOSTNAME'-key\.pem~g' /etc/dovecot/conf.d/10-ssl.conf
 
 		notify 'inf' "SSL configured with 'self-signed' certificates"
 	fi
@@ -997,25 +735,6 @@ function _setup_postfix_override_configuration() {
 
     notify 'inf' "set the compatibility level to 2"
     postconf compatibility_level=2
-}
-
-function _setup_postfix_sasl_password() {
-	notify 'task' 'Setting up Postfix SASL Password'
-
-	# Support general SASL password
-	rm -f /etc/postfix/sasl_passwd
-	if [ ! -z "$SASL_PASSWD" ]; then
-		echo "$SASL_PASSWD" >> /etc/postfix/sasl_passwd
-	fi
-
-	# Install SASL passwords
-	if [ -f /etc/postfix/sasl_passwd ]; then
-		chown root:root /etc/postfix/sasl_passwd
-		chmod 0600 /etc/postfix/sasl_passwd
-		notify 'inf' "Loaded SASL_PASSWD"
-	else
-		notify 'inf' "Warning: 'SASL_PASSWD' is not provided. /etc/postfix/sasl_passwd not created."
-	fi
 }
 
 function _setup_postfix_relay_hosts() {
@@ -1329,7 +1048,7 @@ function _misc_save_states() {
 	statedir=/var/mail-state
 	if [ "$ONE_DIR" = 1 -a -d $statedir ]; then
 		notify 'inf' "Consolidating all state onto $statedir"
-		for d in /var/spool/postfix /var/lib/postfix /var/lib/amavis /var/lib/clamav /var/lib/spamassassin /var/lib/fail2ban /var/lib/postgrey /var/lib/dovecot; do
+		for d in /var/spool/postfix /var/lib/postfix /var/lib/amavis /var/lib/clamav /var/lib/spamassassin /var/lib/fail2ban /var/lib/postgrey ; do
 			dest=$statedir/`echo $d | sed -e 's/.var.//; s/\//-/g'`
 			if [ -d $dest ]; then
 				notify 'inf' "  Destination $dest exists, linking $d to it"
@@ -1378,11 +1097,6 @@ function _start_daemons_rsyslog() {
     supervisorctl start rsyslog
 }
 
-function _start_daemons_saslauthd() {
-	notify 'task' 'Starting saslauthd' 'n'
-    supervisorctl start "saslauthd_${SASLAUTHD_MECHANISMS}"
-}
-
 function _start_daemons_fail2ban() {
 	notify 'task' 'Starting fail2ban ' 'n'
 	touch /var/log/auth.log
@@ -1411,32 +1125,6 @@ function _start_daemons_postsrsd(){
 function _start_daemons_postfix() {
 	notify 'task' 'Starting postfix' 'n'
     supervisorctl start postfix
-}
-
-function _start_daemons_dovecot() {
-	# Here we are starting sasl and imap, not pop3 because it's disabled by default
-
-	notify 'task' 'Starting dovecot services' 'n'
-
-	if [ "$ENABLE_POP3" = 1 ]; then
-		notify 'task' 'Starting pop3 services' 'n'
-		mv /etc/dovecot/protocols.d/pop3d.protocol.disab /etc/dovecot/protocols.d/pop3d.protocol
-	fi
-
-	if [ -f /tmp/docker-mailserver/dovecot.cf ]; then
-		cp /tmp/docker-mailserver/dovecot.cf /etc/dovecot/local.conf
-	fi
-
-    supervisorctl start dovecot
-
-	# @TODO fix: on integration test
-	# doveadm: Error: userdb lookup: connect(/var/run/dovecot/auth-userdb) failed: No such file or directory
-	# doveadm: Fatal: user listing failed
-
-	#if [ "$ENABLE_LDAP" != 1 ]; then
-		#echo "Listing users"
-		#/usr/sbin/dovecot user '*'
-	#fi
 }
 
 function _start_daemons_filebeat() {
