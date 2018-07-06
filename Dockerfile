@@ -13,6 +13,19 @@ ENV POSTGREY_TEXT="Delayed by postgrey"
 ENV SASLAUTHD_MECHANISMS=pam
 ENV SASLAUTHD_MECH_OPTIONS=""
 
+# System users
+RUN adduser --system --uid 200 --group --home /home/syslog syslog \
+ && adduser --system --uid 201 --group --home /var/spool/postfix postfix \
+ && adduser --system --uid 202 --group --home /var/lib/postsrsd postsrsd \
+ && adduser --system --uid 203 --group --home /nonexistent policyd-spf \
+ && adduser --system --uid 204 --group --home /var/lib/clamav clamav \
+ && adduser --system --uid 205 --group --home /var/run/opendmarc opendmarc \
+ && adduser --system --uid 206 --group --home /var/lib/postgrey postgrey \
+ && adduser --system --uid 207 --group --home /var/run/opendkim opendkim \
+ && adduser --system --uid 208 --group --home /var/lib/fetchmail fetchmail \
+ && adduser --system --uid 209 --group --home /var/lib/amavis --shell /bin/sh amavis \
+ && adduser --system --uid 210 --group --home /var/lib/spamassassin --shell /bin/sh debian-spamd
+
 # Packages
 RUN apt-get update -q --fix-missing && \
   apt-get -y upgrade && \
