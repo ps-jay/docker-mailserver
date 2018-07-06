@@ -1,5 +1,5 @@
 FROM debian:stretch-slim
-MAINTAINER Thomas VIAL
+MAINTAINER Philip Jay <phil@jay.id.au>
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV VIRUSMAILS_DELETE_DELAY=7
@@ -66,6 +66,12 @@ RUN apt-get update -q --fix-missing && \
     unzip \
     xz-utils \
     zoo \
+    && \
+  apt-get -y install --no-install-recommends \
+    iputils-ping \
+    man-db \
+    telnet \
+    vim \
     && \
   curl https://packages.elasticsearch.org/GPG-KEY-elasticsearch | apt-key add - && \
   echo "deb http://packages.elastic.co/beats/apt stable main" | tee -a /etc/apt/sources.list.d/beats.list && \
