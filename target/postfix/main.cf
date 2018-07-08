@@ -70,10 +70,7 @@ postscreen_bare_newline_action = enforce
 smtpd_sasl_auth_enable = no
 broken_sasl_auth_clients = no
 
-# Mail directory
-virtual_transport = lmtp:unix:/var/run/dovecot/lmtp
-virtual_mailbox_domains = /etc/postfix/vhost
-virtual_mailbox_maps = texthash:/etc/postfix/vmailbox
+# Forwarding only ... aliases are here
 virtual_alias_maps = texthash:/etc/postfix/virtual
 
 # Additional option for filtering
