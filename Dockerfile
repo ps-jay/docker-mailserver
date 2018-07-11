@@ -169,6 +169,8 @@ RUN mkdir /var/run/fetchmail && chown fetchmail /var/run/fetchmail
 # Configures Postfix
 COPY target/postfix/main.cf target/postfix/master.cf /etc/postfix/
 COPY target/postfix/sender_header_filter.pcre target/postfix/sender_login_maps.pcre /etc/postfix/maps/
+# Supress error
+RUN touch /etc/postfix/vmailbox
 
 # Configuring Logs
 RUN sed -i -r "/^#?compress/c\compress\ncopytruncate" /etc/logrotate.conf && \
