@@ -140,6 +140,7 @@ if ! [ $resu_acc = "OK" ] || ! [ $resu_vir = "OK" ]; then
 			# if they are equal it means the line looks like: "user1     other@domain.tld"
 			test "$uname" != "$domain" && echo ${domain} >> /tmp/vhost.tmp
 		done < /tmp/docker-mailserver/postfix-virtual.cf
+		postmap /etc/postfix/virtual
 	fi
 	if [ -f /tmp/docker-mailserver/postfix-regexp.cf ]; then
 		# Copying regexp alias file

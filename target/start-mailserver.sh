@@ -477,7 +477,7 @@ function _setup_spoof_protection () {
 	sed -i 's|smtpd_sender_restrictions =|smtpd_sender_restrictions = reject_authenticated_sender_login_mismatch,|' /etc/postfix/main.cf
 	[ "$ENABLE_LDAP" = 1 ] \
 		&& postconf -e "smtpd_sender_login_maps=ldap:/etc/postfix/ldap-users.cf ldap:/etc/postfix/ldap-aliases.cf ldap:/etc/postfix/ldap-groups.cf" \
-		|| postconf -e "smtpd_sender_login_maps=texthash:/etc/postfix/virtual, texthash:/etc/aliases, pcre:/etc/postfix/maps/sender_login_maps.pcre"
+		|| postconf -e "smtpd_sender_login_maps=hash:/etc/postfix/virtual, hash:/etc/aliases, pcre:/etc/postfix/maps/sender_login_maps.pcre"
 }
 
 function _setup_postfix_access_control() {
@@ -504,6 +504,7 @@ function _setup_postfix_aliases() {
 			# if they are equal it means the line looks like: "user1     other@domain.tld"
 			test "$uname" != "$domain" && echo ${domain} >> /tmp/vhost.tmp
 		done < /tmp/docker-mailserver/postfix-virtual.cf
+		postmap /etc/postfix/virtual
 	else
 		notify 'inf' "Warning 'config/postfix-virtual.cf' is not provided. No mail alias/forward created."
 	fi
