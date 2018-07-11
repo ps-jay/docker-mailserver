@@ -474,7 +474,8 @@ function _setup_postfix_postscreen() {
 
 function _setup_spoof_protection () {
 	notify 'inf' "Configuring Spoof Protection"
-	sed -i 's|smtpd_sender_restrictions =|smtpd_sender_restrictions = reject_authenticated_sender_login_mismatch,|' /etc/postfix/main.cf
+# XXX: PJ: doesn't work without SASL
+	#sed -i 's|smtpd_sender_restrictions =|smtpd_sender_restrictions = reject_authenticated_sender_login_mismatch,|' /etc/postfix/main.cf
 	[ "$ENABLE_LDAP" = 1 ] \
 		&& postconf -e "smtpd_sender_login_maps=ldap:/etc/postfix/ldap-users.cf ldap:/etc/postfix/ldap-aliases.cf ldap:/etc/postfix/ldap-groups.cf" \
 		|| postconf -e "smtpd_sender_login_maps=hash:/etc/postfix/virtual, hash:/etc/aliases, pcre:/etc/postfix/maps/sender_login_maps.pcre"
