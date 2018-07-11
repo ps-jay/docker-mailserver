@@ -116,7 +116,7 @@ RUN sed -i -r 's/^(CRON)=0/\1=1/g' /etc/default/spamassassin && \
     sed -i -r 's/^\$INIT restart/supervisorctl restart amavis/g' /etc/spamassassin/sa-update-hooks.d/amavisd-new
 
 # DHParams & weekly regen
-RUN echo "" > /etc/aliases && \
+RUN echo "blackhole: /dev/null" > /etc/aliases && \
   openssl dhparam -out /etc/postfix/dhparams.pem 2048 && \
   echo "@weekly FILE=`mktemp` ; openssl dhparam -out $FILE 2048 > /dev/null 2>&1 && mv -f $FILE /etc/postfix/dhparams.pem" > /etc/cron.d/dh2048
 
