@@ -927,19 +927,19 @@ function _setup_elk_forwarder() {
 function _setup_logrotate() {
 	notify 'inf' "Setting up logrotate"
 
-	LOGROTATE="/var/log/mail/mail.log\n{\n  compress\n  copytruncate\n  delaycompress\n"
+	LOGROTATE="/var/log/mail/mail.log\n{\n  copytruncate\n"
 	case "$REPORT_INTERVAL" in
 		"daily" )
 			notify 'inf' "Setting postfix summary interval to daily"
-			LOGROTATE="$LOGROTATE  rotate 1\n  daily\n"
+			LOGROTATE="$LOGROTATE  rotate 2555\n  daily\n"
 			;;
 		"weekly" )
 			notify 'inf' "Setting postfix summary interval to weekly"
-			LOGROTATE="$LOGROTATE  rotate 1\n  weekly\n"
+			LOGROTATE="$LOGROTATE  rotate 364\n  weekly\n"
 			;;
 		"monthly" )
 			notify 'inf' "Setting postfix summary interval to monthly"
-			LOGROTATE="$LOGROTATE  rotate 1\n  monthly\n"
+			LOGROTATE="$LOGROTATE  rotate 84\n  monthly\n"
 			;;
 	esac
 	LOGROTATE="$LOGROTATE}"

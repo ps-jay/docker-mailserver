@@ -173,8 +173,9 @@ COPY target/postfix/sender_header_filter.pcre target/postfix/sender_login_maps.p
 RUN touch /etc/postfix/vmailbox
 
 # Configuring Logs
-RUN sed -i -r "/^#?compress/c\compress\ncopytruncate" /etc/logrotate.conf && \
-  mkdir -p /var/log/mail && \
+COPY target/logrotate/main.conf /etc/logrotate.conf
+COPY target/logrotate/rsyslog /etc/logrotate.d/
+RUN mkdir -p /var/log/mail && \
   chown syslog:root /var/log/mail && \
   touch /var/log/mail/clamav.log && \
   chown -R clamav:root /var/log/mail/clamav.log && \
@@ -186,13 +187,9 @@ RUN sed -i -r "/^#?compress/c\compress\ncopytruncate" /etc/logrotate.conf && \
   sed -i -r 's|UpdateLogFile /var/log/clamav/|UpdateLogFile /var/log/mail/|g' /etc/clamav/freshclam.conf && \
   sed -i -r 's|/var/log/clamav|/var/log/mail|g' /etc/logrotate.d/clamav-daemon && \
   sed -i -r 's|/var/log/clamav|/var/log/mail|g' /etc/logrotate.d/clamav-freshclam && \
-  sed -i -r 's|/var/log/mail|/var/log/mail/mail|g' /etc/logrotate.d/rsyslog && \
-  sed -i -r '/\/var\/log\/mail\/mail.log/d' /etc/logrotate.d/rsyslog && \
   # prevent syslog logrotate warnings \
   sed -i -e 's/\(printerror "could not determine current runlevel"\)/#\1/' /usr/sbin/invoke-rc.d && \
-  sed -i -e 's/^\(POLICYHELPER=\).*/\1/' /usr/sbin/invoke-rc.d && \
-  # prevent email when /sbin/init or init system is not existing \
-  sed -i -e 's/invoke-rc.d rsyslog rotate > \/dev\/null/invoke-rc.d rsyslog --quiet rotate > \/dev\/null/g' /etc/logrotate.d/rsyslog
+  sed -i -e 's/^\(POLICYHELPER=\).*/\1/' /usr/sbin/invoke-rc.d
 
 # Get LetsEncrypt signed certificate
 RUN curl -s https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem > /etc/ssl/certs/lets-encrypt-x3-cross-signed.pem
