@@ -116,8 +116,7 @@ RUN sed -i -r 's/^(CRON)=0/\1=1/g' /etc/default/spamassassin && \
     sed -i -r 's/^\$INIT restart/supervisorctl restart amavis/g' /etc/spamassassin/sa-update-hooks.d/amavisd-new
 
 # DHParams & weekly regen
-RUN echo "blackhole: /dev/null" > /etc/aliases && \
-  openssl dhparam -out /etc/postfix/dhparams.pem 2048 && \
+RUN openssl dhparam -out /etc/postfix/dhparams.pem 2048 && \
   echo "@weekly FILE=`mktemp` ; openssl dhparam -out $FILE 2048 > /dev/null 2>&1 && mv -f $FILE /etc/postfix/dhparams.pem" > /etc/cron.d/dh2048
 
 # Enables Postgrey
@@ -190,6 +189,8 @@ RUN mkdir -p /var/log/mail && \
   # prevent syslog logrotate warnings \
   sed -i -e 's/\(printerror "could not determine current runlevel"\)/#\1/' /usr/sbin/invoke-rc.d && \
   sed -i -e 's/^\(POLICYHELPER=\).*/\1/' /usr/sbin/invoke-rc.d
+
+RUN echo "blackhole: /dev/null" > /etc/aliases && postalias /etc/aliases
 
 # Get LetsEncrypt signed certificate
 RUN curl -s https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.pem > /etc/ssl/certs/lets-encrypt-x3-cross-signed.pem
