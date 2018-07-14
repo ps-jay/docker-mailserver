@@ -132,6 +132,7 @@ COPY target/postsrsd/postsrsd /etc/default/postsrsd
 # Enables Amavis
 COPY target/amavis/conf.d/* /etc/amavis/conf.d/
 RUN sed -i -r 's/#(@|   \\%)bypass/\1bypass/g' /etc/amavis/conf.d/15-content_filter_mode && \
+    sed -i -r 's/D_BOUNCE/D_DISCARD/g' /etc/amavis/conf.d/20-debian_defaults && \
   adduser clamav amavis && \
   adduser amavis clamav && \
   # no syslog user in debian compared to ubuntu
