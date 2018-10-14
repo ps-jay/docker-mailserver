@@ -3,6 +3,9 @@
 # SOFT BOUNCE WHEN TRYING NEW FEATURES
 soft_bounce = yes
 
+# just under 25mb
+message_size_limit = 26000000
+
 smtpd_banner = $myhostname ESMTP $mail_name
 biff = no
 append_dot_mydomain = no
